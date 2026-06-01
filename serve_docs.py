@@ -26,6 +26,7 @@ EXCLUDE_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", ".tox"}
 MARKDEEP_SNIPPET = (
     "<!-- Markdeep: -->"
     '<style class="fallback">body{visibility:hidden;white-space:pre;font-family:monospace}</style>'
+    "<script>window.markdeepOptions = {tocStyle:'long',tocDepth:2, detectMath:true};</script>"
     '<script src="markdeep.min.js" charset="utf-8"></script>'
     '<script src="https://morgan3d.github.io/markdeep/latest/markdeep.min.js" charset="utf-8"></script>'
     '<script>window.alreadyProcessedMarkdeep||(document.body.style.visibility="visible")</script>'
@@ -218,7 +219,7 @@ def build_viewer(root: pathlib.Path, rel_path: str) -> tuple[int, str]:
 
 def make_handler(root: pathlib.Path):
     class Handler(http.server.BaseHTTPRequestHandler):
-        def log_message(self, fmt, *args):
+        def log_message(self, format, *args):
             pass  # suppress default access log
 
         def send_html(self, code: int, html: str):
