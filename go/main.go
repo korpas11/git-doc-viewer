@@ -315,7 +315,24 @@ const layoutHTML = `<!doctype html>
   })();
 </script>
 <style>
-  .md-body { padding-top: 1.5rem; padding-bottom: 4rem; }
+  body { display: flex; min-height: 100vh; margin: 0; }
+  .md-sidebar {
+    width: 260px; flex: 0 0 260px;
+    background: var(--bs-tertiary-bg, #f6f8fa);
+    border-right: 1px solid var(--bs-border-color);
+    padding: 1rem; display: flex; flex-direction: column; gap: 1rem;
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  }
+  .md-sidebar .brand {
+    font-weight: 600; font-size: 1.1rem; text-decoration: none;
+    color: var(--bs-body-color);
+  }
+  .md-main { flex: 1 1 auto; min-width: 0; }
+  .md-body { padding: 1.5rem 2rem 4rem; }
+  .md-current {
+    font-size: .85rem; color: var(--bs-secondary-color);
+    word-break: break-all;
+  }
   .md-body img { max-width: 100%; height: auto; }
   .md-body table { border-collapse: collapse; margin-bottom: 1rem; }
   .md-body table th, .md-body table td {
@@ -334,28 +351,33 @@ const layoutHTML = `<!doctype html>
     padding-left: 1rem; color: var(--bs-secondary-color);
   }
   .theme-menu { max-height: 70vh; overflow-y: auto; }
+  @media (max-width: 768px) {
+    body { flex-direction: column; }
+    .md-sidebar {
+      width: 100%; flex: 0 0 auto; height: auto; position: static;
+      border-right: 0; border-bottom: 1px solid var(--bs-border-color);
+    }
+  }
 </style>
 </head>
 <body>
-<nav class="navbar navbar-expand-lg bg-body-tertiary border-bottom">
-  <div class="container-fluid">
-    <a class="navbar-brand" href="/">📄 Markdown Browser</a>
-    {{if .Current}}<span class="navbar-text text-truncate me-3">{{.Current}}</span>{{end}}
-    <div class="dropdown ms-auto">
-      <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
-              data-bs-toggle="dropdown" aria-expanded="false">
-        Theme: <span id="theme-label"></span>
-      </button>
-      <ul class="dropdown-menu dropdown-menu-end theme-menu">
-        {{range .ThemeNames}}
-        <li><a class="dropdown-item theme-opt" href="#" data-theme="{{.}}">{{.}}</a></li>
-        {{end}}
-      </ul>
-    </div>
+<aside class="md-sidebar">
+  <a class="brand" href="/">📄 Markdown Browser</a>
+  <div class="dropdown">
+    <button class="btn btn-sm btn-outline-secondary dropdown-toggle w-100" type="button"
+            data-bs-toggle="dropdown" aria-expanded="false">
+      Theme: <span id="theme-label"></span>
+    </button>
+    <ul class="dropdown-menu theme-menu">
+      {{range .ThemeNames}}
+      <li><a class="dropdown-item theme-opt" href="#" data-theme="{{.}}">{{.}}</a></li>
+      {{end}}
+    </ul>
   </div>
-</nav>
+  {{if .Current}}<div class="md-current">{{.Current}}</div>{{end}}
+</aside>
 
-<main class="container md-body">
+<main class="md-main md-body">
 {{.Content}}
 </main>
 
