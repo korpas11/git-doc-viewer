@@ -358,6 +358,11 @@ const layoutHTML = `<!doctype html>
       border-right: 0; border-bottom: 1px solid var(--bs-border-color);
     }
   }
+  @media print {
+    body { display: block; }
+    .md-sidebar { display: none; }
+    .md-main, .md-body { padding: 0; }
+  }
 </style>
 </head>
 <body>
