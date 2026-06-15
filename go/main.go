@@ -65,6 +65,7 @@ type bswAPI struct {
 type pageData struct {
 	Title           string
 	Current         string
+	Banner          string
 	Content         template.HTML
 	BootstrapJS     string
 	ThemeNames      []string
@@ -203,13 +204,87 @@ func renderMarkdown(w http.ResponseWriter, full, rel string) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	title, body := extractFrontMatterTitle(src)
 	var buf bytes.Buffer
-	if err := md.Convert(src, &buf); err != nil {
+	if err := md.Convert(body, &buf); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	rel = filepath.ToSlash(rel)
-	renderPage(w, rel, rel, template.HTML(buf.String()))
+	renderPageWithBanner(w, rel, rel, title, template.HTML(buf.String()))
+}
+
+// extractFrontMatterTitle peels a leading `---\n...\n---\n` YAML block off src,
+// returning the value of its `title:` key (if any) and the remaining markdown.
+// Only the title field is parsed; the rest of the front matter is discarded.
+func extractFrontMatterTitle(src []byte) (string, []byte) {
+	s := src
+	// Tolerate a UTF-8 BOM.
+	s = bytes.TrimPrefix(s, []byte{0xEF, 0xBB, 0xBF})
+	if !bytes.HasPrefix(s, []byte("---")) {
+		return "", src
+	}
+	// First line must be exactly `---` (optionally with \r).
+	nl := bytes.IndexByte(s, '\n')
+	if nl < 0 {
+		return "", src
+	}
+	if strings.TrimRight(string(s[:nl]), "\r") != "---" {
+		return "", src
+	}
+	rest := s[nl+1:]
+	// Find the closing `---` line.
+	end := -1
+	for i := 0; i < len(rest); {
+		j := bytes.IndexByte(rest[i:], '\n')
+		var line string
+		if j < 0 {
+			line = string(rest[i:])
+		} else {
+			line = string(rest[i : i+j])
+		}
+		if strings.TrimRight(line, "\r") == "---" {
+			end = i
+			if j >= 0 {
+				rest = append([]byte{}, rest[i+j+1:]...)
+			} else {
+				rest = nil
+			}
+			break
+		}
+		if j < 0 {
+			break
+		}
+		i += j + 1
+	}
+	if end < 0 {
+		return "", src
+	}
+	header := s[nl+1 : nl+1+end]
+	title := ""
+	for _, raw := range strings.Split(string(header), "\n") {
+		line := strings.TrimRight(raw, "\r")
+		t := strings.TrimSpace(line)
+		if t == "" || strings.HasPrefix(t, "#") {
+			continue
+		}
+		k, v, ok := strings.Cut(t, ":")
+		if !ok {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(k), "title") {
+			title = strings.TrimSpace(v)
+			// Strip matching surrounding quotes.
+			if len(title) >= 2 {
+				first, last := title[0], title[len(title)-1]
+				if (first == '"' && last == '"') || (first == '\'' && last == '\'') {
+					title = title[1 : len(title)-1]
+				}
+			}
+			break
+		}
+	}
+	return title, rest
 }
 
 func renderIndex(w http.ResponseWriter) {
@@ -238,10 +313,15 @@ func renderIndex(w http.ResponseWriter) {
 }
 
 func renderPage(w http.ResponseWriter, title, current string, content template.HTML) {
+	renderPageWithBanner(w, title, current, "", content)
+}
+
+func renderPageWithBanner(w http.ResponseWriter, title, current, banner string, content template.HTML) {
 	themesJSON, _ := json.Marshal(themeURLs)
 	data := pageData{
 		Title:           title,
 		Current:         current,
+		Banner:          banner,
 		Content:         content,
 		BootstrapJS:     bootstrapJS,
 		ThemeNames:      themeNames,
@@ -327,7 +407,14 @@ const layoutHTML = `<!doctype html>
     font-weight: 600; font-size: 1.1rem; text-decoration: none;
     color: var(--bs-body-color);
   }
-  .md-main { flex: 1 1 auto; min-width: 0; }
+  .md-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+  .md-banner.navbar {
+    border-radius: 0;
+    padding: 1rem 2rem;
+  }
+  .md-banner .navbar-brand {
+    font-size: 1.5rem; margin: 0;
+  }
   .md-body { padding: 1.5rem 2rem 4rem; }
   .md-current {
     font-size: .85rem; color: var(--bs-secondary-color);
@@ -362,6 +449,11 @@ const layoutHTML = `<!doctype html>
     body { display: block; }
     .md-sidebar { display: none; }
     .md-main, .md-body { padding: 0; }
+    .md-banner.navbar {
+      padding: .75rem 1rem;
+      print-color-adjust: exact;
+      -webkit-print-color-adjust: exact;
+    }
   }
 </style>
 </head>
@@ -382,8 +474,15 @@ const layoutHTML = `<!doctype html>
   {{if .Current}}<div class="md-current">{{.Current}}</div>{{end}}
 </aside>
 
-<main class="md-main md-body">
+<main class="md-main">
+  {{if .Banner}}
+  <nav class="md-banner navbar navbar-dark bg-primary">
+    <span class="navbar-brand">{{.Banner}}</span>
+  </nav>
+  {{end}}
+  <div class="md-body">
 {{.Content}}
+  </div>
 </main>
 
 <script src="{{.BootstrapJS}}"></script>

@@ -1,3 +1,7 @@
+---
+title: Markdown viewer
+---
+
 # mdview
 
 Serves every markdown file in a directory tree as HTML in your browser, styled
