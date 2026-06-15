@@ -448,9 +448,8 @@ const layoutHTML = `<!doctype html>
   @media print {
     body { display: block; }
     .md-sidebar { display: none; }
-    .md-main, .md-body { padding: 0; }
+    .md-main { padding: 0; }
     .md-banner.navbar {
-      padding: .75rem 1rem;
       print-color-adjust: exact;
       -webkit-print-color-adjust: exact;
     }
