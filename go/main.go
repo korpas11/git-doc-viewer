@@ -4,12 +4,15 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"html/template"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -19,6 +22,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/yuin/goldmark"
@@ -50,6 +54,7 @@ var (
 	themeURLs    map[string]string
 	md           goldmark.Markdown
 	tmpl         = template.Must(template.New("layout").Parse(layoutHTML))
+	server       *http.Server
 )
 
 type bswTheme struct {
@@ -105,7 +110,9 @@ func main() {
 		defaultTheme = themeNames[0]
 	}
 
-	http.HandleFunc("/", handler)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/quit", quitHandler)
+	mux.HandleFunc("/", handler)
 
 	display := *addr
 	if strings.HasPrefix(display, ":") {
@@ -113,7 +120,7 @@ func main() {
 	}
 	urlStr := "http://" + display + "/"
 	log.Printf("serving markdown from %s", baseDir)
-	log.Printf("listening on %s", urlStr)
+	log.Printf("listening on %s (pid %d)", urlStr, os.Getpid())
 
 	if *open {
 		go func() {
@@ -122,8 +129,59 @@ func main() {
 		}()
 	}
 
-	if err := http.ListenAndServe(*addr, nil); err != nil {
+	server = &http.Server{Addr: *addr, Handler: mux}
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if isAddrInUse(err) {
+			log.Printf("port %s is already in use — assuming another mdview is running; opening %s", *addr, urlStr)
+			openBrowser(urlStr)
+			os.Exit(0)
+		}
 		log.Fatal(err)
+	}
+}
+
+// isAddrInUse reports whether err is a "bind: address already in use" error.
+func isAddrInUse(err error) bool {
+	var se syscall.Errno
+	if errors.As(err, &se) {
+		return se == syscall.EADDRINUSE
+	}
+	// Some platforms wrap it in net.OpError without exposing the syscall errno
+	// directly; fall back to a string match as a safety net.
+	var oe *net.OpError
+	if errors.As(err, &oe) && oe.Err != nil {
+		return strings.Contains(strings.ToLower(oe.Err.Error()), "address already in use") ||
+			strings.Contains(strings.ToLower(oe.Err.Error()), "only one usage of each socket address")
+	}
+	return false
+}
+
+// quitHandler shuts the server down. GET shows a confirmation page; POST does it.
+func quitHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		const page = `<h1 class="mt-4 mb-3">Stop mdview?</h1>
+<p>This will shut the server down. You will need to relaunch it to view files again.</p>
+<form method="POST" action="/quit">
+  <button type="submit" class="btn btn-danger">Stop server</button>
+  <a href="/" class="btn btn-secondary ms-2">Cancel</a>
+</form>`
+		renderPage(w, "Quit", "", template.HTML(page))
+	case http.MethodPost:
+		const page = `<h1 class="mt-4 mb-3">mdview stopped.</h1>
+<p>You can close this tab.</p>`
+		renderPage(w, "Stopped", "", template.HTML(page))
+		log.Printf("shutdown requested via /quit")
+		go func() {
+			// Give the response a moment to flush before tearing down.
+			time.Sleep(200 * time.Millisecond)
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			_ = server.Shutdown(ctx)
+		}()
+	default:
+		w.Header().Set("Allow", "GET, POST")
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
 }
 
@@ -471,6 +529,7 @@ const layoutHTML = `<!doctype html>
     </ul>
   </div>
   {{if .Current}}<div class="md-current">{{.Current}}</div>{{end}}
+  <a href="/quit" class="btn btn-sm btn-outline-danger mt-auto">Stop server</a>
 </aside>
 
 <main class="md-main">
