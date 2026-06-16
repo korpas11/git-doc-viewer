@@ -413,7 +413,7 @@ const layoutHTML = `<!doctype html>
     padding: 1rem 2rem;
   }
   .md-banner .navbar-brand {
-    font-size: 1.5rem; margin: 0;
+    font-size: 2.25rem; margin: 0; line-height: 1.5rem;
   }
   .md-body { padding: 1.5rem 2rem 4rem; }
   .md-current {
