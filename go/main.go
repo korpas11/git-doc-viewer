@@ -238,13 +238,13 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	rel := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
 	full := filepath.Join(baseDir, filepath.FromSlash(rel))
 	if full != baseDir && !strings.HasPrefix(full, baseDir+string(os.PathSeparator)) {
-		http.NotFound(w, r)
+		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
 
 	info, err := os.Stat(full)
 	if err != nil || info.IsDir() {
-		http.NotFound(w, r)
+		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
 
@@ -482,6 +482,12 @@ const layoutHTML = `<!doctype html>
   .md-body table { border-collapse: collapse; margin-bottom: 1rem; }
   .md-body table th, .md-body table td {
     border: 1px solid var(--bs-border-color); padding: .4rem .65rem;
+  }
+  .md-body table thead th,
+  .md-body table > tbody > tr > th {
+    --bs-table-bg: var(--bs-tertiary-bg, #e9ecef);
+    background-color: var(--bs-tertiary-bg, #e9ecef) !important;
+    background-image: linear-gradient(rgba(0,0,0,.06), rgba(0,0,0,.06));
   }
   .md-body pre {
     background: var(--bs-tertiary-bg, #f6f8fa);
